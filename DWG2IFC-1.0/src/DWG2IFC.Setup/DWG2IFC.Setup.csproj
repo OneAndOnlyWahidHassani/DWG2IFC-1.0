@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>DWG2IFC-Setup</AssemblyName>
+    <RootNamespace>Plant3D.IfcExporter.Setup</RootNamespace>
+    <Version>1.0.0</Version>
+    <Company>Wahid Hassani (fork of baidurovlabs.ru)</Company>
+    <Authors>Original: baidurovlabs.ru; English fork: Wahid Hassani</Authors>
+    <Product>DWG2IFC Setup (English fork by Wahid Hassani)</Product>
+    <Copyright>Original work (c) 2026 baidurovlabs.ru. English fork modifications (c) 2026 Wahid Hassani. Licensed under GNU GPLv3.</Copyright>
+    <RepositoryUrl>https://github.com/OneAndOnlyWahidHassani</RepositoryUrl>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <OutputPath>..\..\bin\Release\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- Embed payload bundle zip into the EXE -->
+  <ItemGroup>
+    <Resource Include="app.ico" />
+    <EmbeddedResource Include="..\..\bin\Release\bundle.zip" Condition="Exists('..\..\bin\Release\bundle.zip')" />
+  </ItemGroup>
+
+</Project>

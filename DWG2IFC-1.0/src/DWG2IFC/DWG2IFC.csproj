@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>DWG2IFC</AssemblyName>
+    <RootNamespace>DWG2IFC</RootNamespace>
+    <Version>1.0.0</Version>
+    <Company>Wahid Hassani (fork of baidurovlabs.ru)</Company>
+    <Authors>Original: baidurovlabs.ru; English fork: Wahid Hassani</Authors>
+    <Product>DWG2IFC (English fork by Wahid Hassani)</Product>
+    <Copyright>Original work (c) 2026 baidurovlabs.ru. English fork modifications (c) 2026 Wahid Hassani. Licensed under GNU GPLv3.</Copyright>
+    <RepositoryUrl>https://github.com/OneAndOnlyWahidHassani</RepositoryUrl>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>..\..\bin\Release\bundle\Contents\net8.0\</OutputPath>
+  </PropertyGroup>
+
+  <!-- AutoCAD 2025/2026 References -->
+  <ItemGroup>
+    <Reference Include="accoremgd">
+      <HintPath>..\..\libs\AutoCAD_2025\accoremgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="acdbmgd">
+      <HintPath>..\..\libs\AutoCAD_2025\acdbmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="acmgd">
+      <HintPath>..\..\libs\AutoCAD_2025\acmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="acdbmgdbrep">
+      <HintPath>..\..\libs\AutoCAD_2025\acdbmgdbrep.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="AdWindows">
+      <HintPath>..\..\libs\AutoCAD_2025\AdWindows.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

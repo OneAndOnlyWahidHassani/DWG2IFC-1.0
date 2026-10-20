@@ -1,0 +1,79 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & package (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore DWG2IFC.sln
+
+      - name: Build (Release)
+        run: dotnet build DWG2IFC.sln -c Release --no-restore
+
+      - name: Resolve release version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $v = $env:GITHUB_REF -replace '^refs/tags/v',''
+          } else {
+            $v = "0.0.0-ci.$($env:GITHUB_RUN_NUMBER)"
+          }
+          Write-Host "Resolved version: $v"
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Package release artefacts
+        shell: pwsh
+        run: ./pack.ps1 -Version ${{ steps.version.outputs.VERSION }}
+
+      - name: Upload build artefact (every run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DWG2IFC-${{ steps.version.outputs.VERSION }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/DWG2IFC-Setup.exe
+            dist/DWG2IFC-*.zip
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          body: |
+            Automated release built from tag `${{ github.ref_name }}`.
+
+            **Install:** download `DWG2IFC-Setup.exe`, close AutoCAD, run the installer, click **Install plugin**, then reopen AutoCAD / Plant 3D 2025 or 2026. Look for the **DWG2IFC** ribbon tab or run `IFCEXPORT`.
+
+            **Checksums:** verify your download against `SHA256SUMS.txt`.
+
+            **Note:** this build is not code-signed. Windows SmartScreen may show an "unknown publisher" warning on first run — click **More info → Run anyway**. Signing via SignPath Foundation is being pursued.
+
+            Original project: https://baidurovlabs.ru — all engineering credit belongs to the upstream authors.
+            This English fork is maintained by Wahid Hassani (https://github.com/OneAndOnlyWahidHassani) under GPLv3.
