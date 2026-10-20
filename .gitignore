@@ -1,18 +1,58 @@
-# Root-level ignores (project-specific rules live in DWG2IFC-1.0/.gitignore)
+# ---- .NET build output ----
+bin/
+obj/
+*.user
+*.suo
+*.sln.docstates
+*.pdb
+*.ilk
+*.exp
+*.cache
+*.lastbuildstate
 
-# OS cruft
+# ---- Visual Studio ----
+.vs/
+
+# ---- VS Code ----
+# Ignore personal settings; commit shared launch/tasks configs by force-adding them if desired.
+.vscode/
+
+# ---- JetBrains Rider / ReSharper ----
+.idea/
+_ReSharper*/
+*.DotSettings.user
+
+# ---- MSBuild / NuGet ----
+msbuild.binlog
+*.binlog
+.nuget/
+packages/
+*.nupkg
+
+# ---- Release artefacts ----
+dist/
+*.zip
+*.runtimeconfig.json
+
+# ---- Setup executables emitted to the repo root ----
+Plant3D_IfcExporter_Setup.*
+DWG2IFC-Setup.*
+
+# ---- Local temp / test artifacts ----
+*.log
+*.scr
+*.ifc
+*.dwg
+debug_trace*.log
+exports_*.txt
+
+# ---- OS cruft ----
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 .DS_Store
 
-# IDE / editor
-.vscode/
-.idea/
+# ---- Editor backups ----
 *.swp
 *.swo
 *~
-
-# MSBuild
-msbuild.binlog
-*.binlog

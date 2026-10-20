@@ -11,10 +11,6 @@ on:
 permissions:
   contents: write
 
-defaults:
-  run:
-    working-directory: DWG2IFC-1.0
-
 jobs:
   build:
     name: Build & package (Windows)
@@ -55,7 +51,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DWG2IFC-${{ steps.version.outputs.VERSION }}
-          path: DWG2IFC-1.0/dist/
+          path: dist/
           if-no-files-found: error
           retention-days: 30
 
@@ -64,9 +60,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            DWG2IFC-1.0/dist/DWG2IFC-Setup.exe
-            DWG2IFC-1.0/dist/DWG2IFC-*.zip
-            DWG2IFC-1.0/dist/SHA256SUMS.txt
+            dist/DWG2IFC-Setup.exe
+            dist/DWG2IFC-*.zip
+            dist/SHA256SUMS.txt
           generate_release_notes: true
           draft: false
           prerelease: false
