@@ -15,8 +15,12 @@
 >
 > No logic, geometry, classification, or export behavior has been modified.
 >
-> **Fork maintainer:** Wahid Hassani — [github.com/OneAndOnlyWahidHassani](https://github.com/OneAndOnlyWahidHassani)
-> (contact via GitHub inbox).
+> **Fork maintainer:** Wahid Hassani — repository at
+> [github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0](https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0).
+> Please file issues or questions via the repository's
+> [Issues tab](https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0/issues),
+> or contact the maintainer through their
+> [GitHub profile](https://github.com/OneAndOnlyWahidHassani) inbox.
 > **Original author:** baidurovlabs.ru — all credit for the plugin's design and
 > implementation belongs to them.
 > **License (both upstream and this fork):** [GNU GPLv3](LICENSE).
@@ -28,7 +32,7 @@ to clean **IFC** (IFC4 / IFC2x3) with honest B-Rep geometry, correct classificat
 semantic property sets (Pset) — without process crashes, parameter loss, or heavy
 commercial toolchains.
 
-Original project: [baidurovlabs.ru](https://baidurovlabs.ru) · English fork: [github.com/OneAndOnlyWahidHassani](https://github.com/OneAndOnlyWahidHassani) · licensed under [GNU GPLv3](LICENSE)
+Original project: [baidurovlabs.ru](https://baidurovlabs.ru) · English fork: [github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0](https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0) · licensed under [GNU GPLv3](LICENSE)
 
 ## Why
 Base AutoCAD has no native direct export to IFC. In AutoCAD Plant 3D the built-in export
@@ -49,32 +53,106 @@ blocks and thousands of fittings.
 DWG2IFC reads topology and properties directly from the AutoCAD session's memory and
 translates them into valid IFC.
 
-## Quick start
-A ready-to-use build is available in [Releases](https://github.com/AnT1pal/DWG2IFC/releases):
-download `DWG2IFC-Setup.exe`, run it, and click "Install plugin". Administrator rights are
-not required — the bundle registers in the user-level `ApplicationPlugins` auto-load folder.
+## Download & installation
+
+Pre-built binaries are published on the
+[Releases page](https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0/releases/latest).
+Every release contains three files:
+
+| File | What it is | Who it's for |
+|---|---|---|
+| `DWG2IFC-Setup.exe` | Self-contained installer with the plugin bundle embedded | Most users |
+| `DWG2IFC-<version>.zip` | Plain bundle folder, LICENSE, and README | Manual / air-gapped installs, IT departments |
+| `SHA256SUMS.txt` | SHA-256 checksums of the two files above | Verifying the download hasn't been tampered with |
+
+### Option 1 — Automated installer (recommended)
+
+1. Close AutoCAD / Plant 3D if it is running.
+2. Download **`DWG2IFC-Setup.exe`** from the Releases page.
+3. (Optional but recommended) Verify the download — in PowerShell:
+   ```powershell
+   Get-FileHash .\DWG2IFC-Setup.exe -Algorithm SHA256
+   ```
+   The hash should match the line for `DWG2IFC-Setup.exe` inside `SHA256SUMS.txt`.
+4. Run the installer. Windows SmartScreen may show an "unknown publisher" warning
+   while code-signing is still being set up (see the **Code signing** section below) —
+   click **More info → Run anyway**.
+5. Click **Install plugin**. Administrator rights are **not** required — the bundle
+   registers in the user-level `%APPDATA%\Autodesk\ApplicationPlugins\` auto-load
+   folder. A desktop shortcut is created.
+6. Reopen AutoCAD or Plant 3D 2025 / 2026. A new **DWG2IFC** tab appears on the ribbon.
+   Click **Export to IFC**, or type `IFCEXPORT` at the AutoCAD command line.
+7. To uninstall later, run `DWG2IFC-Setup.exe` again and click **Uninstall plugin**.
+
+The installer also has a silent command-line mode for scripted deployments:
 
 ```powershell
-DWG2IFC-Setup.exe --install      # silent install
+DWG2IFC-Setup.exe --install      # silent install, exit code 0 on success
 DWG2IFC-Setup.exe --uninstall    # remove the plugin and shortcuts
-DWG2IFC-Setup.exe --status       # check registration status
+DWG2IFC-Setup.exe --status       # print whether the plugin is currently installed
 ```
 
-From source:
+### Option 2 — Manual bundle install (zip)
+
+Useful on machines that block executable installers, when deploying through a
+corporate software catalogue, or when you want to inspect the bundle contents
+before installing.
+
+1. Close AutoCAD / Plant 3D if it is running.
+2. Download **`DWG2IFC-<version>.zip`** from the Releases page.
+3. Extract the archive. You will get a folder named `DWG2IFC.bundle` (plus the
+   `LICENSE` and `README.md` files, which are informational only).
+4. Copy the entire `DWG2IFC.bundle` folder into one of these locations:
+   - **User-level (recommended, no admin rights):**
+     `%APPDATA%\Autodesk\ApplicationPlugins\`
+   - **Machine-wide (requires admin):**
+     `%ProgramData%\Autodesk\ApplicationPlugins\`
+5. Open AutoCAD / Plant 3D. The **DWG2IFC** ribbon tab should appear automatically.
+   If it does not, type `IFCRIBBON` at the command line to force-rebuild the tab,
+   or type `APPAUTOLOADER` to see Autodesk's load diagnostics.
+6. To uninstall manually, simply delete the `DWG2IFC.bundle` folder from the
+   `ApplicationPlugins` directory you copied it into, and (optionally) the
+   `%APPDATA%\Plant3D_IfcExporter\` settings folder.
+
+### Option 3 — Build from source
 
 ```powershell
-git clone https://github.com/AnT1pal/DWG2IFC.git
-cd DWG2IFC
+git clone https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0.git
+cd DWG2IFC-1.0
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-The script compiles the plugin against .NET 8.0 and registers the bundle in AutoCAD.
-Restart AutoCAD: the ribbon will show a **DWG2IFC** tab → **Export to IFC**.
+The script compiles the plugin against .NET 8.0 and registers the bundle in
+AutoCAD. Restart AutoCAD: the ribbon will show the **DWG2IFC** tab.
+Prerequisites: Windows 10/11 x64 and the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
-Commands available in the AutoCAD / Plant 3D command line:
+### Commands registered in AutoCAD / Plant 3D
+
 - `DWG2IFC` or `IFCEXPORT` — open the export dialog with schema, filter, and coordinate options;
 - `PLANTTOIFC` — export using the default parameters;
 - `IFCRIBBON` — force the ribbon tab to be restored or activated.
+
+## Code signing
+
+The `DWG2IFC-Setup.exe` installer is being code-signed as part of the
+[SignPath Foundation](https://signpath.org/) programme for open-source projects.
+Code signing proves the installer you downloaded was built from this exact
+repository by its continuous-integration pipeline and has not been tampered
+with on the way to your machine.
+
+> **Free code signing on Windows provided by [SignPath.io](https://signpath.io/?utm_source=foundation&utm_medium=github&utm_campaign=DWG2IFC-1.0), certificate by [SignPath Foundation](https://signpath.org/).**
+
+Until the SignPath integration is live, releases are published **unsigned**;
+Windows SmartScreen will show an "unknown publisher" warning the first time you
+run the installer. The three practical ways to confirm you have a legitimate
+build until signing is in place:
+
+1. Compare the SHA-256 hash of your `DWG2IFC-Setup.exe` against the value in
+   `SHA256SUMS.txt` published alongside the release.
+2. Confirm the release was published by GitHub Actions on this repository — the
+   **Releases** page shows the exact workflow run and commit that produced each
+   artefact.
+3. Build the plugin yourself from source (Option 3 above) and compare.
 
 ## Entity mapping
 
@@ -244,12 +322,12 @@ clearly marked, and that source code is made available with every binary distrib
 This fork complies with all three obligations — the upstream copyright remains intact,
 the "About this fork" notice at the top of this README lists the changes, and the full
 source of the fork is published at
-[github.com/OneAndOnlyWahidHassani](https://github.com/OneAndOnlyWahidHassani).
+[github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0](https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0).
 
 Original work © 2026 [baidurovlabs.ru](https://baidurovlabs.ru) — all rights to the
 underlying design, geometry pipeline, and IFC writer belong to them. We are deeply
 grateful for the upstream project.
 
 English-fork modifications © 2026 **Wahid Hassani**
-([github.com/OneAndOnlyWahidHassani](https://github.com/OneAndOnlyWahidHassani)),
+([github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0](https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0)),
 released under the same GPLv3 license.

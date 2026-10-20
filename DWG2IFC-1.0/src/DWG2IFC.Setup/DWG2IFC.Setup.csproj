@@ -16,7 +16,8 @@
     <Authors>Original: baidurovlabs.ru; English fork: Wahid Hassani</Authors>
     <Product>DWG2IFC Setup (English fork by Wahid Hassani)</Product>
     <Copyright>Original work (c) 2026 baidurovlabs.ru. English fork modifications (c) 2026 Wahid Hassani. Licensed under GNU GPLv3.</Copyright>
-    <RepositoryUrl>https://github.com/OneAndOnlyWahidHassani</RepositoryUrl>
+    <RepositoryUrl>https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <OutputPath>..\..\bin\Release\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

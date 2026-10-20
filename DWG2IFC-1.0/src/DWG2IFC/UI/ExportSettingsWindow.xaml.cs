@@ -56,7 +56,7 @@ namespace Plant3D.IfcExporter.UI
         {
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://github.com/OneAndOnlyWahidHassani") { UseShellExecute = true });
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0") { UseShellExecute = true });
             }
             catch
             {

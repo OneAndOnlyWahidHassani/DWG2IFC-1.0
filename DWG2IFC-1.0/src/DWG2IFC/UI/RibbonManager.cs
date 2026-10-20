@@ -304,8 +304,9 @@ namespace Plant3D.IfcExporter.UI
                         "Original author: baidurovlabs.ru (https://baidurovlabs.ru)\n" +
                         "Huge thanks to the upstream project, none of this would exist without their work.\n\n" +
                         "English-localized fork maintained by: Wahid Hassani\n" +
-                        "GitHub: https://github.com/OneAndOnlyWahidHassani\n" +
-                        "Contact: via GitHub inbox\n\n" +
+                        "Repository: https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0\n" +
+                        "Issues:     https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0/issues\n" +
+                        "Contact:    via GitHub profile inbox (github.com/OneAndOnlyWahidHassani)\n\n" +
                         "License: GNU GPLv3 (both original and fork)",
                         "About DWG2IFC — baidurovlabs.ru / Wahid Hassani fork",
                         System.Windows.MessageBoxButton.OK,

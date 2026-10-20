@@ -55,7 +55,7 @@
                         <TextBlock Text="Export AutoCAD 3D models and Plant 3D piping to the open IFC format" FontSize="11" Foreground="#9BA1A6"/>
                     </StackPanel>
                 </StackPanel>
-                <Button Grid.Column="1" VerticalAlignment="Center" Cursor="Hand" Background="#142C42" BorderBrush="#1F547E" BorderThickness="1" Padding="10,5" Click="BtnWebsite_Click" ToolTip="Original: baidurovlabs.ru. English fork: github.com/OneAndOnlyWahidHassani. Click to open the fork repository.">
+                <Button Grid.Column="1" VerticalAlignment="Center" Cursor="Hand" Background="#142C42" BorderBrush="#1F547E" BorderThickness="1" Padding="10,5" Click="BtnWebsite_Click" ToolTip="Original: baidurovlabs.ru. English fork: github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0. Click to open the fork repository.">
                     <TextBlock Text="🌐 By baidurovlabs.ru · fork by Wahid Hassani" Foreground="#38BDF8" FontWeight="SemiBold" FontSize="11"/>
                 </Button>
             </Grid>

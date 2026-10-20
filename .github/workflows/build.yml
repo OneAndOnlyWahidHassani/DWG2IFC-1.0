@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    working-directory: DWG2IFC-1.0
+
 jobs:
   build:
     name: Build & package (Windows)
@@ -51,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DWG2IFC-${{ steps.version.outputs.VERSION }}
-          path: dist/
+          path: DWG2IFC-1.0/dist/
           if-no-files-found: error
           retention-days: 30
 
@@ -60,9 +64,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/DWG2IFC-Setup.exe
-            dist/DWG2IFC-*.zip
-            dist/SHA256SUMS.txt
+            DWG2IFC-1.0/dist/DWG2IFC-Setup.exe
+            DWG2IFC-1.0/dist/DWG2IFC-*.zip
+            DWG2IFC-1.0/dist/SHA256SUMS.txt
           generate_release_notes: true
           draft: false
           prerelease: false
@@ -76,4 +80,4 @@ jobs:
             **Note:** this build is not code-signed. Windows SmartScreen may show an "unknown publisher" warning on first run — click **More info → Run anyway**. Signing via SignPath Foundation is being pursued.
 
             Original project: https://baidurovlabs.ru — all engineering credit belongs to the upstream authors.
-            This English fork is maintained by Wahid Hassani (https://github.com/OneAndOnlyWahidHassani) under GPLv3.
+            This English fork is maintained by Wahid Hassani (https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0) under GPLv3.

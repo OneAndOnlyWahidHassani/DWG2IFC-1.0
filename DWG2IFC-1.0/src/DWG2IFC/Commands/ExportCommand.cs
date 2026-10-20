@@ -17,7 +17,8 @@ namespace Plant3D.IfcExporter.Commands
             ed?.WriteMessage("\n=======================================================");
             ed?.WriteMessage("\n[AutoCAD & Plant 3D IFC Exporter] Loaded successfully!");
             ed?.WriteMessage("\nOriginal author: baidurovlabs.ru — thank you for the upstream work.");
-            ed?.WriteMessage("\nEnglish fork maintained by: Wahid Hassani (github.com/OneAndOnlyWahidHassani)");
+            ed?.WriteMessage("\nEnglish fork maintained by: Wahid Hassani");
+            ed?.WriteMessage("\nRepository: github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0");
             ed?.WriteMessage("\nLicense: GNU GPLv3");
             ed?.WriteMessage("\nRibbon tab: 'DWG2IFC'");
             ed?.WriteMessage("\nCommands: IFCEXPORT, PLANTTOIFC, or IFCEXPORT_PLANT");

@@ -200,7 +200,7 @@ namespace Plant3D.IfcExporter.Setup
                         dynamic shortcut = shell.CreateShortcut(shortcutPath);
                         shortcut.TargetPath = exePath;
                         shortcut.WorkingDirectory = Path.GetDirectoryName(exePath) ?? "";
-                        shortcut.Description = "DWG2IFC — AutoCAD & Plant 3D IFC Exporter. Original: baidurovlabs.ru. English fork: Wahid Hassani (github.com/OneAndOnlyWahidHassani). GPLv3.";
+                        shortcut.Description = "DWG2IFC — AutoCAD & Plant 3D IFC Exporter. Original: baidurovlabs.ru. English fork: Wahid Hassani (github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0). GPLv3.";
                         shortcut.IconLocation = $"{exePath},0";
                         shortcut.Save();
                     }

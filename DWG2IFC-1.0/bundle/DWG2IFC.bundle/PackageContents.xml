@@ -6,7 +6,7 @@
     Name="DWG2IFC (AutoCAD &amp; Plant 3D IFC Exporter) — English fork by Wahid Hassani"
     Description="Export AutoCAD 3D models and Plant 3D process piping to the open IFC4/IFC2x3 format. Original work by baidurovlabs.ru; English-localized fork maintained by Wahid Hassani under GPLv3."
     AppVersion="1.0.0"
-    Author="Original: baidurovlabs.ru. Fork maintainer: Wahid Hassani (github.com/OneAndOnlyWahidHassani)"
+    Author="Original: baidurovlabs.ru. Fork maintainer: Wahid Hassani (github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0)"
     ProductCode="{65e6a82d-a2d3-4d5e-8607-9c84d49c4b38}"
     UpgradeCode="{6b09fc7f-f6b4-4cab-9204-a69e745186f5}"
     Icon="./Contents/icon32.png">
@@ -15,8 +15,8 @@
   <!-- This fork is maintained by Wahid Hassani; contact via GitHub inbox. -->
   <CompanyDetails
       Name="Wahid Hassani (fork of baidurovlabs.ru)"
-      Url="https://github.com/OneAndOnlyWahidHassani"
-      Email="https://github.com/OneAndOnlyWahidHassani" />
+      Url="https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0"
+      Email="https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0/issues" />
 
   <!-- AutoCAD & Plant 3D 2025-2026 (.NET 8) -->
   <Components Description="AutoCAD and Plant 3D 2025-2026">

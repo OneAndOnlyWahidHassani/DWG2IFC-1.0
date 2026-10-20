@@ -98,7 +98,7 @@ namespace Plant3D.IfcExporter.Setup
         {
             try
             {
-                Process.Start(new ProcessStartInfo("https://github.com/OneAndOnlyWahidHassani") { UseShellExecute = true });
+                Process.Start(new ProcessStartInfo("https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0") { UseShellExecute = true });
             }
             catch
             {

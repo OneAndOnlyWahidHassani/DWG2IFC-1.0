@@ -62,7 +62,7 @@
                         <TextBlock Text="Install and update manager for versions 2025 and 2026" FontSize="11" Foreground="#9BA1A6" Margin="0,2,0,0"/>
                     </StackPanel>
                 </StackPanel>
-                <Button Grid.Column="1" Style="{StaticResource AcadButtonStyle}" VerticalAlignment="Center" Background="#142C42" BorderBrush="#1F547E" BorderThickness="1" Padding="12,7" Click="BtnWebsite_Click" ToolTip="Original: baidurovlabs.ru. English fork: github.com/OneAndOnlyWahidHassani. Click to open the fork repository.">
+                <Button Grid.Column="1" Style="{StaticResource AcadButtonStyle}" VerticalAlignment="Center" Background="#142C42" BorderBrush="#1F547E" BorderThickness="1" Padding="12,7" Click="BtnWebsite_Click" ToolTip="Original: baidurovlabs.ru. English fork: github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0. Click to open the fork repository.">
                     <TextBlock Text="🌐 By baidurovlabs.ru · fork by Wahid Hassani" Foreground="#38BDF8" FontWeight="SemiBold" FontSize="11"/>
                 </Button>
             </Grid>
