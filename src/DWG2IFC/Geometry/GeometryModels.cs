@@ -60,4 +60,48 @@ namespace Plant3D.IfcExporter.Geometry
 
         public bool IsValid => Vertices.Count >= 3 && Faces.Count >= 1;
     }
+
+    public sealed class SweptDiskGeometry
+    {
+        public List<Vertex3D> AxisPolyline { get; set; } = new();
+        public double OuterRadius { get; set; }
+        public double? InnerRadius { get; set; }
+        public byte Red { get; set; } = 180;
+        public byte Green { get; set; } = 180;
+        public byte Blue { get; set; } = 180;
+
+        public bool IsValid => AxisPolyline.Count >= 2 && OuterRadius > 0;
+    }
+
+    public enum ExtractionTier
+    {
+        None,
+        DirectTypeSwitch,
+        AnalyticalPipe,
+        ExplodeFallback,
+        AnalyticalPipeSupport
+    }
+
+    public enum FailureReason
+    {
+        None,
+        UnknownClass,
+        BrepTessellationFailed,
+        ExplodeFailed,
+        ZeroLengthPipe,
+        MissingDiameter,
+        PlantReflectionUnavailable,
+        EmptyGeometry
+    }
+
+    public sealed class ExtractionOutcome
+    {
+        public ExtractedMesh? Mesh { get; set; }
+        public SweptDiskGeometry? SweptDisk { get; set; }
+        public ExtractionTier Tier { get; set; } = ExtractionTier.None;
+        public FailureReason Failure { get; set; } = FailureReason.None;
+
+        public bool HasGeometry =>
+            (Mesh != null && Mesh.IsValid) || (SweptDisk != null && SweptDisk.IsValid);
+    }
 }

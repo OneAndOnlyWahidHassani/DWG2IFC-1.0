@@ -1,19 +1,30 @@
 > **About this fork**
 >
-> This repository is an **English-localized fork** of the excellent
+> This repository is an **English-localized and extended fork** of the excellent
 > [DWG2IFC](https://baidurovlabs.ru) plugin originally created by **baidurovlabs.ru**.
-> All of the engineering, geometry work, Plant 3D DataLinks extraction, B-Rep stability
-> fixes, and the IFC writer itself are their work — enormous thanks to the upstream
-> authors; this plugin would not exist without them.
+> The core engineering — the B-Rep tessellation pipeline, Plant 3D DataLinks extraction
+> through reflection, the streaming ISO-10303-21 IFC writer, the entity-classification
+> heuristics, the WPF settings dialog, and the heap-corruption fix in `acdbmgdbrep.dll` —
+> is their work. Huge thanks to the upstream authors; none of this would exist
+> without them.
 >
-> The only changes in this fork are:
-> - A full English translation of the user-facing UI (export dialog, installer, ribbon,
+> **What this fork changes relative to upstream:**
+> - Full English translation of the user-facing UI (export dialog, installer, ribbon,
 >   command-line banner, package manifest).
-> - Attribution notes added so users can tell which build they are running.
 > - Fresh `ProductCode` / `UpgradeCode` GUIDs so Autodesk's Autoloader treats this fork
 >   as a distinct product and does not conflict with an installed upstream build.
->
-> No logic, geometry, classification, or export behavior has been modified.
+> - **Plant 3D pipe geometry** — a three-tier extractor that reads
+>   `AcPpDb3dPipe` endpoints and outside diameter via reflection and emits them as
+>   parametric `IfcSweptDiskSolid` (so pipes stay editable in Revit/Tekla, and files
+>   are roughly 10× smaller than the equivalent mesh). Falls back to procedural mesh
+>   or to `Entity.Explode` for anything the direct type switch misses.
+> - **Diagnostics** — every export writes a plain-text `<name>.export.log` next to the
+>   IFC listing per-category totals and the AutoCAD handle of each skipped object,
+>   and a new `DWG2IFC_DIAG` command (also a ribbon button) scans the drawing without
+>   writing an IFC and tells you what *would* export and what *would not*, and why.
+> - User-friendly export-settings dialog: three new checkboxes (parametric pipes,
+>   explode fallback, write log) with hover-over explanations in plain language.
+> - Attribution notes added so users can tell which build they are running.
 >
 > **Fork maintainer:** Wahid Hassani — repository at
 > [github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0](https://github.com/OneAndOnlyWahidHassani/DWG2IFC-1.0).
@@ -22,7 +33,7 @@
 > or contact the maintainer through their
 > [GitHub profile](https://github.com/OneAndOnlyWahidHassani) inbox.
 > **Original author:** baidurovlabs.ru — all credit for the plugin's design and
-> implementation belongs to them.
+> original implementation belongs to them.
 > **License (both upstream and this fork):** [GNU GPLv3](LICENSE).
 
 ---
@@ -128,8 +139,12 @@ Prerequisites: Windows 10/11 x64 and the [.NET 8 SDK](https://dotnet.microsoft.c
 
 ### Commands registered in AutoCAD / Plant 3D
 
-- `DWG2IFC` or `IFCEXPORT` — open the export dialog with schema, filter, and coordinate options;
-- `PLANTTOIFC` — export using the default parameters;
+- `DWG2IFC` or `IFCEXPORT` — open the export dialog with schema, filter, and coordinate options.
+  (Aliases: `PLANTTOIFC`, `IFCEXPORT_PLANT`.)
+- `DWG2IFC_DIAG` — scan the current drawing and write a `<drawing>.diag.log` file next to the
+  DWG listing every 3D object, which extraction tier handled it, and the reason if it was
+  skipped. Writes no IFC. Also available as the **Diagnose drawing** button on the ribbon.
+  Run this first if an export silently produces fewer objects than you expected.
 - `IFCRIBBON` — force the ribbon tab to be restored or activated.
 
 ## Code signing
@@ -156,26 +171,30 @@ build until signing is in place:
 
 ## Entity mapping
 
-DWG2IFC parses both Plant 3D process components and general-purpose 3D solids from base AutoCAD:
+DWG2IFC parses both Plant 3D process components and general-purpose 3D solids from base AutoCAD.
+For every entity, the plugin walks a three-tier extractor and uses the first tier that produces
+geometry: **(1) direct type switch** on AutoCAD CLR types, **(2) parametric pipe** reconstruction
+through Plant 3D reflection, **(3) explode-and-recurse fallback** for custom DBX objects.
 
-| DWG / Plant 3D object | Geometry extraction method | IFC entity (IFC4 / IFC2x3) | PredefinedType / Classification |
+| DWG / Plant 3D object | How geometry is extracted | IFC entity (IFC4 / IFC2x3) | PredefinedType |
 |---|---|---|---|
-| Pipe (`PIPE`, `AcPpDb3dPipe`) | B-Rep tessellation of the pipe body | `IfcPipeSegment` | `.RIGIDSEGMENT.` |
-| Elbow, tee, reducer, flange | B-Rep tessellation of the fitting | `IfcPipeFitting` | `.BEND.`, `.JUNCTION.`, `.TRANSITION.`, `.CONNECTOR.` |
-| Cock, gate valve, control valve, damper | Boundary triangulation of the valve | `IfcValve` | `.ISOLATING.`, `.REGULATING.` |
-| Pump, compressor | B-Rep mesh of the unit | `IfcPump` / `IfcFlowMovingDevice` | `.CIRCULATOR.` / `$` |
-| Vessel, apparatus, tank | Solid geometry of the equipment | `IfcEnergyConversionDevice` | Equipment / Tank |
-| Pipe support, hanger | Tessellation of support elements | `IfcDiscreteAccessory` / `IfcFastener` | Fastening elements |
-| Plant 3D structural steel (`Structure`) | B-Rep profile and extrusion | `IfcBeam` / `IfcColumn` / `IfcMember` | Beams, columns, braces |
-| Solid body (`AcDb3dSolid`) | Analytical B-Rep topology | `IfcTriangulatedFaceSet` / `IfcFacetedBrep` | `IfcBuildingElementProxy` |
-| Surface / Body (`Surface`, `Body`) | AcBr boundary shell | `IfcTriangulatedFaceSet` | `IfcBuildingElementProxy` |
-| Region (`AcDbRegion`) | Triangulation of a closed contour | `IfcTriangulatedFaceSet` | Geometric face |
-| 3D face (`AcDbFace`) | Direct 3/4-point polygon triangulation | `IfcTriangulatedFaceSet` | Polygonal facet |
-| Block (`AcDbBlockReference`) | Recursive traversal of elements using the `BlockTransform` matrix | Expanded component assembly | Based on child solids |
-| Mesh (`AcDbSubDMesh`, `PolyFaceMesh`) | Indexed vertex arrays | `IfcTriangulatedFaceSet` | Faceted mesh |
+| Pipe (`AcPpDb3dPipe`) — straight or curved | Tier 2: reflection reads `StartPoint`/`EndPoint`/`OutsideDiameter`/`WallThickness` and emits a parametric swept-disk; curved pipes sample `PathCurve` | `IfcPipeSegment` as `IfcSweptDiskSolid` *(or triangulated cylinder mesh if the user turns parametric pipes off)* | `.RIGIDSEGMENT.` |
+| Elbow, tee, reducer, flange, olet, cap | Tier 1 for catalog block refs, Tier 3 explode fallback for pure procedural fittings | `IfcPipeFitting` (mesh) | `.BEND.`, `.JUNCTION.`, `.TRANSITION.`, `.CONNECTOR.` |
+| Cock, gate valve, control valve, damper | Tier 1 or Tier 3 depending on how the catalog defines it | `IfcValve` | `.NOTDEFINED.` (refined by name heuristics) |
+| Pump, compressor | Tier 1 B-Rep mesh / Tier 3 explode | `IfcPump` / `IfcFlowMovingDevice` | `.NOTDEFINED.` |
+| Vessel, apparatus, tank, exchanger | Tier 1 solid-geometry mesh | `IfcEnergyConversionDevice` | `.NOTDEFINED.` |
+| Pipe support, hanger | Tier 1 if solid; Tier 4 axis-cylinder fallback is opt-in via config | `IfcDiscreteAccessory` / `IfcFastener` | `.NOTDEFINED.` |
+| Plant 3D structural steel | B-Rep profile and extrusion | `IfcBeam` / `IfcColumn` / `IfcMember` | `.BEAM.`, `.COLUMN.`, `.NOTDEFINED.` |
+| Solid body (`AcDb3dSolid`) | Tier 1: analytical B-Rep topology → triangulated face set | `IfcTriangulatedFaceSet` (IFC4) / `IfcFacetedBrep` (IFC2x3) | `IfcBuildingElementProxy` |
+| Surface / Body (`Surface`, `Body`) | Tier 1: AcBr boundary shell | `IfcTriangulatedFaceSet` | `IfcBuildingElementProxy` |
+| Region (`AcDbRegion`) | Tier 1: triangulation of a closed contour | `IfcTriangulatedFaceSet` | — |
+| 3D face (`AcDbFace`) | Tier 1: direct 3/4-point polygon triangulation | `IfcTriangulatedFaceSet` | — |
+| Block (`AcDbBlockReference`) | Tier 1: recursive traversal using `BlockTransform` matrix, depth ≤ 8 | Expanded assembly | Based on child solids |
+| Mesh (`AcDbSubDMesh`, `PolyFaceMesh`) | Tier 1: indexed vertex arrays | `IfcTriangulatedFaceSet` | — |
+| Any unrecognised Plant/custom DBX entity | Tier 3: `Entity.Explode` in-memory, recurse through Tier 1 on each child, depth ≤ 2 | Mesh of whatever explode produced | `IfcBuildingElementProxy` |
 
 2D primitives (lines, arcs, splines, dimensions, text annotations) are not converted into 3D
-solids and are filtered out during geometry validation.
+solids and are filtered out during candidate collection.
 
 ## Properties and data sets (Pset)
 Every object is tagged with buildingSMART property sets built from Plant 3D DataLinks attributes
@@ -248,11 +267,57 @@ We make no promises of a "magic button that does everything for you". The scope 
 - **2D annotations and wireframes:** Lines (`AcDbLine`), circles, polylines, and text do not
   form closed solids and are not exported as IFC geometry. 2D drawings are the proper tool for them.
 - **Block nesting depth:** Recursive block parsing is capped at depth 8 to protect against
-  cyclic cross-references inside damaged drawings.
+  cyclic cross-references inside damaged drawings. The separate explode-fallback recursion
+  is capped at depth 2.
+- **Paper space entities** are not exported; only ModelSpace is walked.
 - **Non-manifold solids:** If a 3D solid is damaged inside the DWG and the ACIS/B-Rep kernel
-  returns a topology error during tessellation, the plugin creates a safe bounding-box
-  parallelepiped (Bounding Box B-Rep fallback), preserves all element properties, and
-  continues exporting the rest of the drawing.
+  returns a topology error during tessellation, the plugin falls back to a bounding-box
+  parallelepiped so the object is still represented and its property set survives in the IFC.
+  This fallback is applied **only** to `AcDb3dSolid`; it is deliberately **not** applied to
+  Plant 3D custom entities, because silently emitting a mystery box for an unknown Plant
+  object would mislead downstream BIM reviewers. Unknown Plant entities are logged with
+  their AutoCAD handle and skipped instead.
+- **Xref'd geometry** is not walked by default. Opt in via the `IncludeXrefs` flag in
+  `%APPDATA%\Plant3D_IfcExporter\config.json`.
+- **Pipes with no diameter available** — if a pipe entity's outside diameter cannot be read
+  from the Plant 3D API, from DataLinks, nor from its `Size` tag, the pipe is skipped
+  (listed in the export log as `MissingDiameter`). We will not guess a diameter.
+- **The receiving BIM tool matters.** `IfcSweptDiskSolid` is supported by Revit, Tekla,
+  Solibri, FZK Viewer, and BIMvision. A handful of older viewers only render triangle
+  meshes — if you hit one, uncheck "Export Plant 3D pipes as parametric geometry" in the
+  settings dialog and pipes will come through as tessellated cylinders instead.
+
+## Troubleshooting
+*For non-technical users: these are the three things to try, in order, when an export
+doesn't contain what you expected.*
+
+**1. Nothing / fewer objects than expected came out**
+
+Click the **Diagnose drawing** button on the **DWG2IFC** ribbon (or type `DWG2IFC_DIAG`).
+It writes a `<drawingname>.diag.log` file next to your DWG. Open it in Notepad. For every
+3D object in the drawing it tells you: the AutoCAD handle, the class name, which extraction
+tier handled it, and — if the object was skipped — the reason. You can select an object by
+its handle in AutoCAD with `(handent "<handle>")` + `highlight`, or just look at the class
+names in the log to see what kind of objects aren't being picked up.
+
+**2. Pipes are missing from the IFC but fittings/valves appear**
+
+Pipes in Plant 3D are drawn procedurally and need the parametric path to export. In the
+export dialog, confirm **Export Plant 3D pipes as parametric geometry** is checked. Also
+make sure your pipes have a nominal diameter set in Plant 3D — pipes with no diameter info
+anywhere (Plant API, DataLinks, Size tag) are deliberately skipped and listed in the log
+as `MissingDiameter`.
+
+**3. The export log file**
+
+Every export writes `<yourfile>.export.log` next to the IFC (unless you unchecked
+**Write diagnostic log**). It gives you:
+- how many 3D objects were exported, by category (Pipes, Fittings, Valves, Equipment, …);
+- which extraction tier each category used;
+- the AutoCAD handle and reason for every skipped object (first 100 by default).
+
+Send this log to the maintainer if you need help — it contains no drawing contents, only
+object counts and class names.
 
 ## Cross-version compatibility
 The plugin is built for **.NET 8.0 (x64)** and runs on recent Autodesk versions:
@@ -270,23 +335,46 @@ automatic loading on all minor updates and service packs of AutoCAD 2025 and 202
 ## Architecture
 ```
 DWG2IFC/
-├─ bundle/DWG2IFC.bundle/   ← Autodesk auto-loaded bundle
+├─ bundle/DWG2IFC.bundle/   ← Autodesk auto-loader bundle TEMPLATE (xml + icon only).
+│  │                           The deployable bundle with compiled DLLs lives at
+│  │                           bin/Release/bundle/ after build.ps1 runs.
 │  ├─ PackageContents.xml   registration manifest, runtime requirements, commands
-│  └─ Contents/             icons and compiled net8.0 binaries
+│  └─ Contents/icon32.png   ribbon icon
 ├─ src/
 │  ├─ DWG2IFC/              ← main plugin (AutoCAD .NET Extension)
-│  │  ├─ Commands/          command entry points (DWG2IFC, IFCEXPORT, PLANTTOIFC, IFCRIBBON)
-│  │  ├─ Geometry/          B-Rep solid tessellation, vertex welding
-│  │  ├─ Ifc/               streaming IFC writer (ISO-10303-21), GUID generator
-│  │  ├─ Plant/             dynamic extraction of PnP DataLinks properties via reflection
-│  │  ├─ Settings/          export configuration (JSON in AppData)
-│  │  └─ UI/                WPF interface styled after AutoCAD 2026, ribbon manager
+│  │  ├─ Commands/          command entry points (DWG2IFC, IFCEXPORT, PLANTTOIFC,
+│  │  │                     IFCRIBBON, DWG2IFC_DIAG, TESTEXPORT, INSPECT_BLOCK)
+│  │  ├─ Geometry/          Three-tier extractor (BrepMeshExtractor), swept-disk and
+│  │  │                     mesh models, vertex welding
+│  │  ├─ Ifc/               streaming IFC writer (ISO-10303-21) — mesh and
+│  │  │                     IfcSweptDiskSolid emission, deterministic IFC GUIDs
+│  │  ├─ Plant/             reflection-based Plant 3D DataLinks property extractor
+│  │  │                     and PlantPipeGeometryHelper (pipe axis + radius reader,
+│  │  │                     cylinder tessellator)
+│  │  ├─ Settings/          export configuration (JSON in %APPDATA%\Plant3D_IfcExporter\)
+│  │  └─ UI/                WPF settings dialog + ribbon manager
 │  └─ DWG2IFC.Setup/        ← standalone WPF/CLI installer with embedded payload
 ├─ libs/AutoCAD_2025/       ← reference AutoCAD API assemblies (.NET 8.0)
 ├─ build.cmd / build.ps1    plugin and installer build scripts
 ├─ install.ps1              bundle deployment into an installed AutoCAD
 └─ pack.ps1                 release distribution builder into dist\
 ```
+
+### Advanced settings (`%APPDATA%\Plant3D_IfcExporter\config.json`)
+
+Most users never need to edit this file — the UI dialog covers the important knobs. For
+scripted deployments or power users, the full set of fields is:
+
+| Field | Default | What it does |
+|---|---|---|
+| `UseAnalyticalPipes` | `true` | Pipes export as parametric `IfcSweptDiskSolid`. Off = tessellated cylinder mesh. |
+| `EnableExplodeFallback` | `true` | For custom entities the direct type switch doesn't handle, explode a copy in memory and extract from the children. |
+| `UseAnalyticalPipeSupports` | `false` | Opt-in: approximate `*Support*`/`*Hanger*` custom entities as a cylinder along their bounding-box's long axis. Not accurate — only turn on if your supports otherwise don't export at all. |
+| `PipeTessellationSides` | `20` | Facet count for the cylinder tessellator (used when parametric pipes are off, and for support fallbacks). |
+| `CurvedPipeSamples` | `16` | Sample count along a pipe's `PathCurve` when discretising a curved pipe into a polyline directrix. |
+| `WriteExportLog` | `true` | Write a `.export.log` next to the IFC. |
+| `MaxLoggedSkipped` | `100` | How many skipped-entity rows to include in the log. |
+| `IncludeXrefs` | `false` | Walk xref model spaces as well as the host ModelSpace. |
 
 ## Build and packaging
 

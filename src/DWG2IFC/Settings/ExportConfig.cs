@@ -27,6 +27,17 @@ namespace Plant3D.IfcExporter.Settings
         public double WeldingToleranceMm { get; set; } = 0.5; // mm
         public bool UseAnalyticalPipes { get; set; } = true;
         public bool ExportInsulation { get; set; } = true;
+        public int PipeTessellationSides { get; set; } = 20;
+        public bool EnableExplodeFallback { get; set; } = true;
+        public bool UseAnalyticalPipeSupports { get; set; } = false;
+        public int CurvedPipeSamples { get; set; } = 16;
+
+        // Diagnostics
+        public bool WriteExportLog { get; set; } = true;
+        public int MaxLoggedSkipped { get; set; } = 100;
+
+        // Scope extensions
+        public bool IncludeXrefs { get; set; } = false;
 
         // Properties settings
         public bool ExportPlantProperties { get; set; } = true;

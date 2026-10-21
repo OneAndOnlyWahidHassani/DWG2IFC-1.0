@@ -63,6 +63,91 @@ namespace Plant3D.IfcExporter.Commands
             doc?.Editor.WriteMessage("\n[DWG2IFC] Ribbon tab refreshed and shown.\n");
         }
 
+        [CommandMethod("DWG2IFC_DIAG")]
+        public void RunDiagnostics()
+        {
+            var doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            var ed = doc.Editor;
+            var db = doc.Database;
+
+            var config = Settings.ExportConfig.Load();
+            string drawingDir;
+            try { drawingDir = Path.GetDirectoryName(doc.Name) ?? Path.GetTempPath(); }
+            catch { drawingDir = Path.GetTempPath(); }
+            string logPath = Path.Combine(drawingDir, Path.GetFileNameWithoutExtension(doc.Name ?? "drawing") + ".diag.log");
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"DWG2IFC diagnostics — {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine($"Drawing: {doc.Name}");
+            sb.AppendLine($"Toggles: UseAnalyticalPipes={config.UseAnalyticalPipes}, EnableExplodeFallback={config.EnableExplodeFallback}, UseAnalyticalPipeSupports={config.UseAnalyticalPipeSupports}");
+            sb.AppendLine();
+            sb.AppendLine($"{"Handle",-12}  {"RXClass",-45}  {"Tier",-24}  {"Faces/AxisPts",-14}  Reason");
+
+            int total = 0, exported = 0, skipped = 0;
+            var byTier = new System.Collections.Generic.Dictionary<string, int>();
+
+            try
+            {
+                using (doc.LockDocument())
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var bt = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
+                    var ms = tr.GetObject(bt![BlockTableRecord.ModelSpace], OpenMode.ForRead) as BlockTableRecord;
+                    foreach (ObjectId id in ms!)
+                    {
+                        var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                        if (ent == null) continue;
+                        total++;
+                        string rx;
+                        try { rx = ent.GetRXClass().Name ?? ""; } catch { rx = ""; }
+
+                        var plantData = Plant.PlantDataExtractor.Extract(ent, tr);
+                        var outcome = Geometry.BrepMeshExtractor.TryExtract(ent, tr, config, plantData);
+
+                        string tier = outcome.Tier.ToString();
+                        string reason = outcome.Failure.ToString();
+                        string count = outcome.SweptDisk != null
+                            ? $"axis={outcome.SweptDisk.AxisPolyline.Count}"
+                            : outcome.Mesh != null
+                                ? $"faces={outcome.Mesh.Faces.Count}"
+                                : "0";
+
+                        string handle;
+                        try { handle = ent.Handle.ToString(); } catch { handle = "?"; }
+
+                        sb.AppendLine($"{handle,-12}  {rx,-45}  {tier,-24}  {count,-14}  {reason}");
+
+                        byTier[tier] = byTier.TryGetValue(tier, out var tv) ? tv + 1 : 1;
+                        if (outcome.HasGeometry) exported++;
+                        else skipped++;
+                    }
+                    tr.Commit();
+                }
+            }
+            catch (System.Exception ex)
+            {
+                sb.AppendLine($"ERROR: {ex.Message}");
+                sb.AppendLine(ex.StackTrace);
+            }
+
+            sb.AppendLine();
+            sb.AppendLine($"Totals: candidates={total}, extractable={exported}, skipped={skipped}");
+            foreach (var kvp in byTier)
+            {
+                sb.AppendLine($"  Tier {kvp.Key,-24}  {kvp.Value}");
+            }
+
+            try { File.WriteAllText(logPath, sb.ToString(), new System.Text.UTF8Encoding(false)); } catch { }
+
+            ed.WriteMessage($"\n[DWG2IFC_DIAG] candidates={total}, extractable={exported}, skipped={skipped}\n");
+            ed.WriteMessage($"[DWG2IFC_DIAG] Log written to: {logPath}\n");
+            foreach (var kvp in byTier)
+            {
+                ed.WriteMessage($"  Tier {kvp.Key}: {kvp.Value}\n");
+            }
+        }
+
         [CommandMethod("TESTEXPORT")]
         public void RunTestExport()
         {

@@ -4,12 +4,290 @@ using System.Linq;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.BoundaryRepresentation;
+using Plant3D.IfcExporter.Plant;
 using Plant3D.IfcExporter.Settings;
 
 namespace Plant3D.IfcExporter.Geometry
 {
     public static class BrepMeshExtractor
     {
+        public static ExtractionOutcome TryExtract(Entity entity, Transaction tr, ExportConfig config, PlantComponentData? plantData = null)
+        {
+            var outcome = new ExtractionOutcome();
+
+            // Tier 1 — direct type switch (existing path)
+            var mesh = ExtractMesh(entity, tr, config);
+            if (mesh.IsValid)
+            {
+                outcome.Mesh = mesh;
+                outcome.Tier = ExtractionTier.DirectTypeSwitch;
+                return outcome;
+            }
+
+            string rxName = SafeRxClassName(entity);
+            bool isPipeClass = PlantPipeGeometryHelper.IsPipeClassName(rxName);
+
+            // Tier 2 — pipe geometry via Plant reflection (parametric or mesh)
+            if (isPipeClass)
+            {
+                var data = plantData ?? PlantDataExtractor.Extract(entity, tr);
+                if (PlantPipeGeometryHelper.TryBuildPipeGeometry(entity, data, config, out var swept, out var reason) && swept != null)
+                {
+                    if (config.UseAnalyticalPipes)
+                    {
+                        ApplyLayerColorIfNeeded(entity, tr, swept);
+                        outcome.SweptDisk = swept;
+                        outcome.Tier = ExtractionTier.AnalyticalPipe;
+                        return outcome;
+                    }
+
+                    // User disabled parametric pipes — tessellate the same axis+radius into a mesh
+                    var axisPts = swept.AxisPolyline.ConvertAll(v => new Point3d(v.X, v.Y, v.Z));
+                    var tris = PlantPipeGeometryHelper.TessellateCylinderMesh(axisPts, swept.OuterRadius, Math.Max(3, config.PipeTessellationSides));
+                    if (tris.Count > 0)
+                    {
+                        var meshOut = new ExtractedMesh { Red = swept.Red, Green = swept.Green, Blue = swept.Blue };
+                        WeldVertices(tris, config.WeldingToleranceMm, meshOut);
+                        if (meshOut.IsValid)
+                        {
+                            ApplyLayerColorToMesh(entity, tr, meshOut);
+                            outcome.Mesh = meshOut;
+                            outcome.Tier = ExtractionTier.AnalyticalPipe;
+                            return outcome;
+                        }
+                    }
+                }
+                outcome.Failure = reason;
+                // Record pipe-helper failure reason and still try explode fallback below
+            }
+
+            // Tier 3 — explode fallback
+            if (config.EnableExplodeFallback)
+            {
+                var explodedMesh = TryExplodeToMesh(entity, tr, config);
+                if (explodedMesh != null && explodedMesh.IsValid)
+                {
+                    outcome.Mesh = explodedMesh;
+                    outcome.Tier = ExtractionTier.ExplodeFallback;
+                    outcome.Failure = FailureReason.None;
+                    return outcome;
+                }
+            }
+
+            // Tier 4 (opt-in) — pipe-support axis fallback
+            if (config.UseAnalyticalPipeSupports && (rxName.Contains("Support", StringComparison.OrdinalIgnoreCase) || rxName.Contains("Hanger", StringComparison.OrdinalIgnoreCase)))
+            {
+                var fallbackMesh = TrySupportAxisFallback(entity, config);
+                if (fallbackMesh != null && fallbackMesh.IsValid)
+                {
+                    outcome.Mesh = fallbackMesh;
+                    outcome.Tier = ExtractionTier.AnalyticalPipeSupport;
+                    outcome.Failure = FailureReason.None;
+                    return outcome;
+                }
+            }
+
+            if (outcome.Failure == FailureReason.None)
+            {
+                outcome.Failure = FailureReason.UnknownClass;
+            }
+            return outcome;
+        }
+
+        private static string SafeRxClassName(Entity entity)
+        {
+            try { return entity.GetRXClass().Name ?? string.Empty; }
+            catch { return string.Empty; }
+        }
+
+        private static void ApplyLayerColorIfNeeded(Entity entity, Transaction tr, SweptDiskGeometry geom)
+        {
+            try
+            {
+                if (!entity.Color.IsByLayer) return;
+                var layer = tr.GetObject(entity.LayerId, OpenMode.ForRead) as LayerTableRecord;
+                if (layer != null)
+                {
+                    geom.Red = layer.Color.ColorValue.R;
+                    geom.Green = layer.Color.ColorValue.G;
+                    geom.Blue = layer.Color.ColorValue.B;
+                }
+            }
+            catch { }
+        }
+
+        private static void ApplyLayerColorToMesh(Entity entity, Transaction tr, ExtractedMesh mesh)
+        {
+            try
+            {
+                if (!entity.Color.IsByLayer) return;
+                var layer = tr.GetObject(entity.LayerId, OpenMode.ForRead) as LayerTableRecord;
+                if (layer != null)
+                {
+                    mesh.Red = layer.Color.ColorValue.R;
+                    mesh.Green = layer.Color.ColorValue.G;
+                    mesh.Blue = layer.Color.ColorValue.B;
+                }
+            }
+            catch { }
+        }
+
+        private static ExtractedMesh? TryExplodeToMesh(Entity entity, Transaction tr, ExportConfig config)
+        {
+            DBObjectCollection? col = null;
+            try
+            {
+                col = new DBObjectCollection();
+                entity.Explode(col);
+                if (col.Count == 0) return null;
+
+                var raw = new List<(Point3d, Point3d, Point3d)>();
+                foreach (DBObject obj in col)
+                {
+                    if (obj is Entity child && child.Visible)
+                    {
+                        ExtractIntoList(child, tr, config, raw, depth: 1);
+                    }
+                }
+
+                if (raw.Count == 0) return null;
+
+                var mesh = new ExtractedMesh();
+                try
+                {
+                    if (entity.Color.IsByLayer)
+                    {
+                        var layer = tr.GetObject(entity.LayerId, OpenMode.ForRead) as LayerTableRecord;
+                        if (layer != null)
+                        {
+                            mesh.Red = layer.Color.ColorValue.R;
+                            mesh.Green = layer.Color.ColorValue.G;
+                            mesh.Blue = layer.Color.ColorValue.B;
+                        }
+                    }
+                    else
+                    {
+                        mesh.Red = entity.Color.ColorValue.R;
+                        mesh.Green = entity.Color.ColorValue.G;
+                        mesh.Blue = entity.Color.ColorValue.B;
+                    }
+                }
+                catch { }
+
+                WeldVertices(raw, config.WeldingToleranceMm, mesh);
+                return mesh;
+            }
+            catch
+            {
+                return null;
+            }
+            finally
+            {
+                if (col != null)
+                {
+                    foreach (DBObject obj in col)
+                    {
+                        try { obj.Dispose(); } catch { }
+                    }
+                    try { col.Dispose(); } catch { }
+                }
+            }
+        }
+
+        private static void ExtractIntoList(Entity entity, Transaction tr, ExportConfig config, List<(Point3d, Point3d, Point3d)> triangles, int depth)
+        {
+            if (depth > 2) return;
+
+            if (entity is Solid3d s)
+            {
+                ExtractFromSolid3d(s, triangles);
+            }
+            else if (entity is PolyFaceMesh p)
+            {
+                ExtractFromPolyFaceMesh(p, tr, triangles);
+            }
+            else if (entity is SubDMesh d)
+            {
+                ExtractFromSubDMesh(d, triangles);
+            }
+            else if (entity is Body body)
+            {
+                try { using var brep = new Brep(body); ExtractFromBrep(brep, triangles); } catch { }
+            }
+            else if (entity is Region region)
+            {
+                try { using var brep = new Brep(region); ExtractFromBrep(brep, triangles); } catch { }
+            }
+            else if (entity is Autodesk.AutoCAD.DatabaseServices.Surface surf)
+            {
+                try { using var brep = new Brep(surf); ExtractFromBrep(brep, triangles); } catch { }
+            }
+            else if (entity is Autodesk.AutoCAD.DatabaseServices.Face face)
+            {
+                ExtractFromFace(face, triangles);
+            }
+            else if (entity is BlockReference br)
+            {
+                ExtractFromBlockReference(br, tr, config, triangles);
+            }
+            else
+            {
+                // Try one more explode level for custom children (e.g. nested Plant assemblies)
+                DBObjectCollection? childCol = null;
+                try
+                {
+                    childCol = new DBObjectCollection();
+                    entity.Explode(childCol);
+                    if (childCol.Count > 0)
+                    {
+                        foreach (DBObject sub in childCol)
+                        {
+                            if (sub is Entity childEnt && childEnt.Visible)
+                            {
+                                ExtractIntoList(childEnt, tr, config, triangles, depth + 1);
+                            }
+                        }
+                    }
+                }
+                catch { }
+                finally
+                {
+                    if (childCol != null)
+                    {
+                        foreach (DBObject sub in childCol)
+                        {
+                            try { sub.Dispose(); } catch { }
+                        }
+                        try { childCol.Dispose(); } catch { }
+                    }
+                }
+            }
+        }
+
+        private static ExtractedMesh? TrySupportAxisFallback(Entity entity, ExportConfig config)
+        {
+            try
+            {
+                var ext = entity.GeometricExtents;
+                var min = ext.MinPoint;
+                var max = ext.MaxPoint;
+                double dx = max.X - min.X, dy = max.Y - min.Y, dz = max.Z - min.Z;
+                double smallest = Math.Min(Math.Min(dx, dy), dz);
+                double radius = Math.Max(smallest * 0.5, 10.0);
+                var axis = new List<Point3d>
+                {
+                    new Point3d((min.X + max.X) * 0.5, (min.Y + max.Y) * 0.5, min.Z),
+                    new Point3d((min.X + max.X) * 0.5, (min.Y + max.Y) * 0.5, max.Z)
+                };
+                var tris = PlantPipeGeometryHelper.TessellateCylinderMesh(axis, radius, Math.Max(3, config.PipeTessellationSides));
+                if (tris.Count == 0) return null;
+                var mesh = new ExtractedMesh();
+                WeldVertices(tris, config.WeldingToleranceMm, mesh);
+                return mesh;
+            }
+            catch { return null; }
+        }
+
         public static ExtractedMesh ExtractMesh(Entity entity, Transaction tr, ExportConfig config)
         {
             var mesh = new ExtractedMesh();

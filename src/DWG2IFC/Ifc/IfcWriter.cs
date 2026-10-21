@@ -11,9 +11,17 @@ namespace Plant3D.IfcExporter.Ifc
 {
     public class ExportItem
     {
-        public ExtractedMesh Mesh { get; set; } = new();
+        public ExtractedMesh? Mesh { get; set; }
+        public SweptDiskGeometry? SweptDisk { get; set; }
         public PlantComponentData Data { get; set; } = new();
         public ClassificationResult Classification { get; set; } = new();
+
+        public bool HasGeometry =>
+            (Mesh != null && Mesh.IsValid) || (SweptDisk != null && SweptDisk.IsValid);
+
+        public byte R => SweptDisk?.Red ?? Mesh?.Red ?? (byte)180;
+        public byte G => SweptDisk?.Green ?? Mesh?.Green ?? (byte)180;
+        public byte B => SweptDisk?.Blue ?? Mesh?.Blue ?? (byte)180;
     }
 
     public class IfcWriter
@@ -150,27 +158,28 @@ namespace Plant3D.IfcExporter.Ifc
             for (int i = 0; i < items.Count; i++)
             {
                 var item = items[i];
-                if (!item.Mesh.IsValid) continue;
+                if (!item.HasGeometry) continue;
 
-                var mesh = item.Mesh;
                 var data = item.Data;
+                bool isSwept = item.SweptDisk != null && item.SweptDisk.IsValid;
 
                 // Color / Style
                 int idStyle;
-                var colorKey = (mesh.Red, mesh.Green, mesh.Blue);
+                byte cR = item.R, cG = item.G, cB = item.B;
+                var colorKey = (cR, cG, cB);
                 if (!styleCache.TryGetValue(colorKey, out idStyle))
                 {
                     int idColor = NextId();
-                    double r = mesh.Red / 255.0;
-                    double g = mesh.Green / 255.0;
-                    double b = mesh.Blue / 255.0;
+                    double r = cR / 255.0;
+                    double g = cG / 255.0;
+                    double b = cB / 255.0;
                     sw.WriteLine($"#{idColor}=IFCCOLOURRGB($,{r.ToString("F3", _ci)},{g.ToString("F3", _ci)},{b.ToString("F3", _ci)});");
 
                     int idShading = NextId();
                     sw.WriteLine($"#{idShading}=IFCSURFACESTYLESHADING(#{idColor});");
 
                     int idSurfStyle = NextId();
-                    sw.WriteLine($"#{idSurfStyle}=IFCSURFACESTYLE('Style_{mesh.Red}_{mesh.Green}_{mesh.Blue}',.BOTH.,(#{idShading}));");
+                    sw.WriteLine($"#{idSurfStyle}=IFCSURFACESTYLE('Style_{cR}_{cG}_{cB}',.BOTH.,(#{idShading}));");
 
                     idStyle = NextId();
                     sw.WriteLine($"#{idStyle}=IFCPRESENTATIONSTYLEASSIGNMENT((#{idSurfStyle}));");
@@ -179,8 +188,16 @@ namespace Plant3D.IfcExporter.Ifc
 
                 // Geometry creation
                 int idGeomSolid;
-                if (isIfc4)
+                string repType;
+                if (isSwept)
                 {
+                    idGeomSolid = EmitSweptDisk(sw, item.SweptDisk!, unitScale, offX, offY, offZ);
+                    repType = isIfc4 ? "'AdvancedSweptSolid'" : "'SweptSolid'";
+                }
+                else if (isIfc4)
+                {
+                    var mesh = item.Mesh!;
+                    repType = "'Tessellation'";
                     // IFC4: IfcTriangulatedFaceSet with IfcCartesianPointList3D
                     int idPtList = NextId();
                     var sbPts = new StringBuilder(mesh.Vertices.Count * 32);
@@ -214,6 +231,8 @@ namespace Plant3D.IfcExporter.Ifc
                 }
                 else
                 {
+                    var mesh = item.Mesh!;
+                    repType = "'Brep'";
                     // IFC2x3: IfcFacetedBrep with IfcPolyLoop
                     var faceIds = new List<int>(mesh.Faces.Count);
                     foreach (var f in mesh.Faces)
@@ -251,7 +270,6 @@ namespace Plant3D.IfcExporter.Ifc
 
                 // Shape Representation
                 int idShapeRep = NextId();
-                string repType = isIfc4 ? "'Tessellation'" : "'Brep'";
                 sw.WriteLine($"#{idShapeRep}=IFCSHAPEREPRESENTATION(#{idBodySubContext},'Body',{repType},(#{idGeomSolid}));");
 
                 // Product Definition Shape
@@ -352,6 +370,33 @@ namespace Plant3D.IfcExporter.Ifc
             sw.WriteLine("ENDSEC;");
             sw.WriteLine("END-ISO-10303-21;");
             sw.Flush();
+        }
+
+        private int EmitSweptDisk(StreamWriter sw, SweptDiskGeometry geom, double unitScale, double offX, double offY, double offZ)
+        {
+            // Emit each axis point as IFCCARTESIANPOINT, group into IFCPOLYLINE, then IFCSWEPTDISKSOLID.
+            var pointIds = new List<int>(geom.AxisPolyline.Count);
+            foreach (var v in geom.AxisPolyline)
+            {
+                int idPt = NextId();
+                double vx = (v.X - offX) * unitScale;
+                double vy = (v.Y - offY) * unitScale;
+                double vz = (v.Z - offZ) * unitScale;
+                sw.WriteLine($"#{idPt}=IFCCARTESIANPOINT(({vx.ToString("F4", _ci)},{vy.ToString("F4", _ci)},{vz.ToString("F4", _ci)}));");
+                pointIds.Add(idPt);
+            }
+
+            int idPolyline = NextId();
+            sw.WriteLine($"#{idPolyline}=IFCPOLYLINE(({string.Join(",", pointIds.ConvertAll(pid => "#" + pid))}));");
+
+            double outerR = geom.OuterRadius * unitScale;
+            double? innerR = geom.InnerRadius.HasValue ? geom.InnerRadius.Value * unitScale : (double?)null;
+
+            int idSweptDisk = NextId();
+            string innerStr = innerR.HasValue ? innerR.Value.ToString("F4", _ci) : "$";
+            // IFCSWEPTDISKSOLID(Directrix, Radius, InnerRadius, StartParam, EndParam)
+            sw.WriteLine($"#{idSweptDisk}=IFCSWEPTDISKSOLID(#{idPolyline},{outerR.ToString("F4", _ci)},{innerStr},$,$);");
+            return idSweptDisk;
         }
 
         private static string Escape(string text)

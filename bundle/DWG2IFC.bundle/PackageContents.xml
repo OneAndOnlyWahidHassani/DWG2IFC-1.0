@@ -40,6 +40,7 @@
         <Command Global="PLANTTOIFC" Local="PLANTTOIFC" />
         <Command Global="IFCEXPORT_PLANT" Local="IFCEXPORT_PLANT" />
         <Command Global="IFCRIBBON" Local="IFCRIBBON" />
+        <Command Global="DWG2IFC_DIAG" Local="DWG2IFC_DIAG" />
       </Commands>
     </ComponentEntry>
   </Components>

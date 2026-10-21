@@ -274,7 +274,7 @@ namespace Plant3D.IfcExporter.UI
                             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                             "Autodesk",
                             "ApplicationPlugins",
-                            "Plant3D_IfcExporter.bundle"
+                            "DWG2IFC.bundle"
                         );
                         if (!Directory.Exists(pluginsDir)) Directory.CreateDirectory(pluginsDir);
                         Process.Start(new ProcessStartInfo("explorer.exe", pluginsDir) { UseShellExecute = true });
@@ -320,7 +320,27 @@ namespace Plant3D.IfcExporter.UI
                 }
             };
 
+            var btnDiag = new RibbonButton
+            {
+                Text = "Diagnose drawing",
+                ShowText = true,
+                ShowImage = true,
+                Size = RibbonItemSize.Standard,
+                Image = IconHelper.CreateSettingsIcon(16),
+                CommandHandler = new RelayCommand(() =>
+                {
+                    AcApp.DocumentManager.MdiActiveDocument?.SendStringToExecute("DWG2IFC_DIAG ", true, false, false);
+                }),
+                ToolTip = new RibbonToolTip
+                {
+                    Title = "Diagnose drawing",
+                    Content = "Scans every 3D object in the current drawing and writes a log file next to the DWG showing what WOULD export and what WOULD NOT, and why. Nothing is written to disk apart from the log."
+                }
+            };
+
             rowTools.Items.Add(btnFolder);
+            rowTools.Items.Add(new RibbonRowBreak());
+            rowTools.Items.Add(btnDiag);
             rowTools.Items.Add(new RibbonRowBreak());
             rowTools.Items.Add(btnAbout);
             panelSourceTools.Items.Add(rowTools);

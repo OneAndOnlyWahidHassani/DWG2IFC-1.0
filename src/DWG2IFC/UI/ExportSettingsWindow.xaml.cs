@@ -7,6 +7,8 @@ using Microsoft.Win32;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using System.Linq;
+using System.Text;
 using Plant3D.IfcExporter.Geometry;
 using Plant3D.IfcExporter.Ifc;
 using Plant3D.IfcExporter.Plant;
@@ -48,6 +50,9 @@ namespace Plant3D.IfcExporter.UI
             TxtPsetPrefix.Text = _config.PropertySetPrefix;
             TxtProjectName.Text = _config.ProjectName;
             TxtBuildingName.Text = _config.BuildingName;
+            ChkParametricPipes.IsChecked = _config.UseAnalyticalPipes;
+            ChkExplodeFallback.IsChecked = _config.EnableExplodeFallback;
+            ChkWriteLog.IsChecked = _config.WriteExportLog;
 
             PanelOffsets.Visibility = _config.OffsetToOrigin ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
         }
@@ -116,6 +121,9 @@ namespace Plant3D.IfcExporter.UI
             _config.PropertySetPrefix = TxtPsetPrefix.Text.Trim();
             _config.ProjectName = TxtProjectName.Text.Trim();
             _config.BuildingName = TxtBuildingName.Text.Trim();
+            _config.UseAnalyticalPipes = ChkParametricPipes.IsChecked == true;
+            _config.EnableExplodeFallback = ChkExplodeFallback.IsChecked == true;
+            _config.WriteExportLog = ChkWriteLog.IsChecked == true;
             _config.Save();
 
             BtnExport.IsEnabled = false;
@@ -125,6 +133,7 @@ namespace Plant3D.IfcExporter.UI
             try
             {
                 var items = new List<ExportItem>();
+                var diag = new ExportDiagnostics();
                 var db = _doc.Database;
 
                 // Collect entities on UI thread with AutoCAD transaction
@@ -132,6 +141,7 @@ namespace Plant3D.IfcExporter.UI
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
                     var entityIds = CollectTargetEntities(db, tr);
+                    diag.TotalCandidates = entityIds.Count;
                     TxtStatus.Text = $"Processing geometry ({entityIds.Count} items)...";
 
                     int count = 0;
@@ -146,7 +156,11 @@ namespace Plant3D.IfcExporter.UI
                         }
 
                         var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                        if (ent == null || !ent.Visible) continue;
+                        if (ent == null || !ent.Visible)
+                        {
+                            diag.RecordSkip(ent, "Hidden", FailureReason.None);
+                            continue;
+                        }
 
                         var plantData = PlantDataExtractor.Extract(ent, tr);
 
@@ -154,11 +168,18 @@ namespace Plant3D.IfcExporter.UI
                         if (!string.IsNullOrWhiteSpace(_config.FilterLineNumber))
                         {
                             if (!string.Equals(plantData.LineNumberTag, _config.FilterLineNumber, StringComparison.OrdinalIgnoreCase))
+                            {
+                                diag.FilteredOutByLineNumber++;
                                 continue;
+                            }
                         }
 
-                        var mesh = BrepMeshExtractor.ExtractMesh(ent, tr, _config);
-                        if (!mesh.IsValid) continue;
+                        var outcome = BrepMeshExtractor.TryExtract(ent, tr, _config, plantData);
+                        if (!outcome.HasGeometry)
+                        {
+                            diag.RecordSkip(ent, SafeRxName(ent), outcome.Failure);
+                            continue;
+                        }
 
                         var classification = PlantClassifier.Classify(
                             plantData.ClassName,
@@ -168,9 +189,12 @@ namespace Plant3D.IfcExporter.UI
                             plantData.Layer
                         );
 
+                        diag.RecordExport(classification.EntityType, outcome.Tier);
+
                         items.Add(new ExportItem
                         {
-                            Mesh = mesh,
+                            Mesh = outcome.Mesh,
+                            SweptDisk = outcome.SweptDisk,
                             Data = plantData,
                             Classification = classification
                         });
@@ -207,7 +231,38 @@ namespace Plant3D.IfcExporter.UI
                 TxtStatus.Text = "Export completed successfully!";
                 var fileInfo = new FileInfo(outPath);
                 double mb = fileInfo.Length / (1024.0 * 1024.0);
-                MessageBox.Show($"Export completed successfully!\n\nItems: {items.Count}\nFile: {outPath}\nSize: {mb:F2} MB", "Done", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                string logPath = Path.ChangeExtension(outPath, ".export.log");
+                if (_config.WriteExportLog)
+                {
+                    try { WriteExportLog(logPath, items.Count, mb, diag); } catch { }
+                }
+
+                _doc.Editor.WriteMessage("\n" + diag.BuildSummary(items.Count));
+
+                string friendly = diag.BuildFriendlySummary(items.Count);
+                string tail = $"\n\nSaved to:\n   {outPath}  ({mb:F2} MB)";
+                if (_config.WriteExportLog) tail += $"\n\nDetails log:\n   {logPath}";
+                tail += "\n\nOpen the output folder now?";
+
+                var choice = MessageBox.Show(
+                    "Export completed.\n\n" + friendly + tail,
+                    "DWG2IFC — Export done",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+
+                if (choice == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        var folder = Path.GetDirectoryName(outPath);
+                        if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{outPath}\"") { UseShellExecute = true });
+                        }
+                    }
+                    catch { }
+                }
             }
             catch (Exception ex)
             {
@@ -301,6 +356,146 @@ namespace Plant3D.IfcExporter.UI
             }
 
             return result;
+        }
+
+        private static string SafeRxName(Entity? ent)
+        {
+            try { return ent?.GetRXClass().Name ?? "<null>"; }
+            catch { return "<unknown>"; }
+        }
+
+        private void WriteExportLog(string logPath, int exportedCount, double mb, ExportDiagnostics diag)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"DWG2IFC export log — {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine($"Drawing: {_doc.Name}");
+            sb.AppendLine($"Settings: schema={_config.Schema}, scope={_config.Scope}, units={(_config.UseMillimetres ? "mm" : "m")}, " +
+                          $"offset=({_config.CustomOffsetX},{_config.CustomOffsetY},{_config.CustomOffsetZ}) applied={_config.OffsetToOrigin}");
+            sb.AppendLine($"Toggles: UseAnalyticalPipes={_config.UseAnalyticalPipes}, EnableExplodeFallback={_config.EnableExplodeFallback}, " +
+                          $"UseAnalyticalPipeSupports={_config.UseAnalyticalPipeSupports}, IncludeXrefs={_config.IncludeXrefs}");
+            sb.AppendLine();
+            sb.AppendLine(diag.BuildSummary(exportedCount));
+            sb.AppendLine($"IFC size: {mb:F2} MB");
+            sb.AppendLine();
+            sb.AppendLine("By extraction tier:");
+            foreach (var kvp in diag.ByTier.OrderByDescending(k => k.Value))
+            {
+                sb.AppendLine($"  {kvp.Key,-25}  exported={kvp.Value}");
+            }
+            sb.AppendLine();
+            sb.AppendLine("By IFC category:");
+            foreach (var kvp in diag.ByCategory.OrderByDescending(k => k.Value))
+            {
+                sb.AppendLine($"  {kvp.Key,-25}  exported={kvp.Value}");
+            }
+            sb.AppendLine();
+            if (diag.FilteredOutByLineNumber > 0)
+            {
+                sb.AppendLine($"Filtered out by line number filter: {diag.FilteredOutByLineNumber}");
+                sb.AppendLine();
+            }
+            sb.AppendLine($"Skipped entries (first {Math.Min(diag.Skipped.Count, _config.MaxLoggedSkipped)} of {diag.Skipped.Count}):");
+            sb.AppendLine($"  {"Handle",-12}  {"RXClass",-40}  Reason");
+            int limit = Math.Min(diag.Skipped.Count, _config.MaxLoggedSkipped);
+            for (int i = 0; i < limit; i++)
+            {
+                var s = diag.Skipped[i];
+                sb.AppendLine($"  {s.Handle,-12}  {s.RxClass,-40}  {s.Reason}");
+            }
+            File.WriteAllText(logPath, sb.ToString(), new UTF8Encoding(false));
+        }
+    }
+
+    public sealed class ExportDiagnostics
+    {
+        public int TotalCandidates { get; set; }
+        public int FilteredOutByLineNumber { get; set; }
+
+        public Dictionary<string, int> ByCategory { get; } = new();
+        public Dictionary<string, int> ByTier { get; } = new();
+
+        public List<SkipEntry> Skipped { get; } = new();
+
+        public void RecordExport(IfcEntityType cat, ExtractionTier tier)
+        {
+            var k = cat.ToString();
+            ByCategory[k] = ByCategory.TryGetValue(k, out var v) ? v + 1 : 1;
+            var tk = tier.ToString();
+            ByTier[tk] = ByTier.TryGetValue(tk, out var tv) ? tv + 1 : 1;
+        }
+
+        public void RecordSkip(Entity? ent, string rxClass, FailureReason reason)
+        {
+            string handle = "<null>";
+            try { if (ent != null) handle = ent.Handle.ToString(); } catch { }
+            Skipped.Add(new SkipEntry
+            {
+                Handle = handle,
+                RxClass = rxClass,
+                Reason = reason.ToString()
+            });
+        }
+
+        public string BuildSummary(int exportedCount)
+        {
+            int skipped = Skipped.Count;
+            var sb = new StringBuilder();
+            sb.AppendLine($"Totals: candidates={TotalCandidates}, exported={exportedCount}, skipped={skipped}, filtered={FilteredOutByLineNumber}");
+            if (ByCategory.Count > 0)
+            {
+                sb.AppendLine("By category:");
+                foreach (var kvp in ByCategory.OrderByDescending(k => k.Value))
+                {
+                    sb.AppendLine($"  {kvp.Key,-30} {kvp.Value}");
+                }
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        public string BuildFriendlySummary(int exportedCount)
+        {
+            int skipped = Skipped.Count;
+            var sb = new StringBuilder();
+            sb.AppendLine($"Exported: {exportedCount} 3D objects");
+            if (skipped > 0) sb.AppendLine($"Skipped:  {skipped} objects (see log for the AutoCAD handles)");
+            if (FilteredOutByLineNumber > 0) sb.AppendLine($"Filtered out by line-number filter: {FilteredOutByLineNumber}");
+
+            if (ByCategory.Count > 0)
+            {
+                sb.AppendLine();
+                foreach (var kvp in ByCategory.OrderByDescending(k => k.Value))
+                {
+                    sb.AppendLine($"  {FriendlyCategory(kvp.Key)}: {kvp.Value}");
+                }
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        private static string FriendlyCategory(string ifcTypeName)
+        {
+            return ifcTypeName switch
+            {
+                "IfcPipeSegment" => "Pipes",
+                "IfcPipeFitting" => "Fittings (elbows, tees, reducers, flanges)",
+                "IfcValve" => "Valves",
+                "IfcPump" => "Pumps",
+                "IfcFlowMovingDevice" => "Flow-moving devices (compressors, fans)",
+                "IfcEnergyConversionDevice" => "Equipment (tanks, vessels, exchangers)",
+                "IfcDiscreteAccessory" => "Pipe supports / hangers",
+                "IfcFastener" => "Bolts / gaskets / fasteners",
+                "IfcBeam" => "Beams",
+                "IfcColumn" => "Columns",
+                "IfcMember" => "Structural members",
+                "IfcBuildingElementProxy" => "Generic 3D objects",
+                _ => ifcTypeName
+            };
+        }
+
+        public sealed class SkipEntry
+        {
+            public string Handle { get; set; } = string.Empty;
+            public string RxClass { get; set; } = string.Empty;
+            public string Reason { get; set; } = string.Empty;
         }
     }
 }

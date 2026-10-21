@@ -19,6 +19,7 @@ namespace Plant3D.IfcExporter.Plant
         public string Status { get; set; } = string.Empty;
         public string Layer { get; set; } = string.Empty;
         public string Handle { get; set; } = string.Empty;
+        public double? OutsideDiameterMm { get; set; }
         public Dictionary<string, string> CustomProperties { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -139,7 +140,27 @@ namespace Plant3D.IfcExporter.Plant
                 // Graceful fallback to CAD properties if DataLinks query fails
             }
 
+            data.OutsideDiameterMm = ResolveOutsideDiameterMm(data);
             return data;
+        }
+
+        private static double? ResolveOutsideDiameterMm(PlantComponentData data)
+        {
+            string[] keys = { "OD", "OutsideDiameter", "Outside Diameter", "NominalDiameter", "Nominal Diameter", "ND", "Size", "Diameter", "PipeOD" };
+            foreach (var k in keys)
+            {
+                if (data.CustomProperties.TryGetValue(k, out var raw))
+                {
+                    var v = PlantPipeGeometryHelper.ParseDiameterMm(raw);
+                    if (v.HasValue && v.Value > 0) return v.Value;
+                }
+            }
+            if (!string.IsNullOrWhiteSpace(data.Size))
+            {
+                var v = PlantPipeGeometryHelper.ParseDiameterMm(data.Size);
+                if (v.HasValue && v.Value > 0) return v.Value;
+            }
+            return null;
         }
     }
 }
